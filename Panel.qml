@@ -24,7 +24,7 @@ Panel {
   // With the percentage shown the button paints a text block wider than an
   // icon, so the open-panel mark takes the painted width instead of the
   // icon-sized fraction of the slot the fallback assumes.
-  readonly property real openPanelIndicatorWidth: showPercentage && !button.vertical ? button.glyphPaintedWidth : 0
+  readonly property real openPanelIndicatorWidth: showPercentage && !button.vertical ? button.componentPaintedWidth : 0
   readonly property bool batteryPresent: {
     var device = UPower.displayDevice
     return !!(device && device.isPresent)
@@ -50,7 +50,7 @@ Panel {
 
   function batteryIcon() {
     var device = UPower.displayDevice
-    return Model.batteryIcon(device, root.discharging, upowerStates())
+    return Model.batteryIcon(device, root.charging)
   }
 
   function modeLabel() {
@@ -87,6 +87,13 @@ Panel {
     var d = UPower.displayDevice
     return d && d.isPresent && !UPower.onBattery && !root.batteryFlowIdle
   }
+
+  // The charger is connected. Upstream shows that only while the battery
+  // charges, so a battery holding at its charge limit looked like one running
+  // on battery. The plug badge marks plugged-in-but-not-charging; charging
+  // keeps upstream's bolt icons.
+  readonly property bool pluggedIn: batteryPresent && !UPower.onBattery
+  readonly property bool showPlugBadge: pluggedIn && !charging
 
   readonly property color batteryFillColor: {
     return root.bar ? root.bar.foreground : Commons.Color.foreground
@@ -289,8 +296,39 @@ Panel {
     bar: root.bar
     text: root.batteryIcon()
     labelText: root.showPercentage && !vertical ? Commons.I18n.formatNumber(Math.round(root.batteryFraction * 100)) + "%" : ""
-    slotSize: Style.bar.iconSlot * (root.showPercentage && !vertical ? 2 : 1)
-    tooltipText: ""
+
+    // The battery glyph as upstream draws it, plus a small plug just right of
+    // it while the charger is connected and the battery is not charging. Set
+    // beside the battery rather than over it: the bar may have no background
+    // to cut a halo out of, and an overlapping plug merged into the battery.
+    iconComponent: Component {
+      Item {
+        OpticalGlyph {
+          id: batteryGlyph
+          anchors.fill: parent
+          text: root.batteryIcon()
+          fontFamily: button.fontFamily
+          fontSize: button.fontSize
+          paintedSize: button.visualIconSize
+          color: button.foreground
+        }
+
+        Text {
+          visible: root.showPlugBadge
+          textFormat: Text.PlainText
+          text: Model.PLUG_BADGE
+          color: button.foreground
+          font.family: button.fontFamily
+          font.pixelSize: Math.round(batteryGlyph.paintedHeight * 0.62)
+          renderType: Text.NativeRendering
+          // Left edge just past the battery's painted right edge; bottom on
+          // the battery's bottom.
+          x: batteryGlyph.paintedCenterX + batteryGlyph.paintedWidth / 2 + 1
+          y: batteryGlyph.paintedCenterY + batteryGlyph.paintedHeight / 2 - height * 0.8
+        }
+      }
+    }
+
     onPressed: function(b) {
       if (!root.batteryPresent) return
       if (b === Qt.RightButton) root.togglePercentage()
@@ -345,12 +383,29 @@ Panel {
             anchors.verticalCenter: parent.verticalCenter
 
             Behavior on color { ColorAnimation { duration: Style.duration(200) } }
+
+            // Same plug as on the bar icon, just right of the battery. Its
+            // space is kept when it is hidden, so the title does not shift on
+            // plugging in or out.
+            Text {
+              id: heroPlug
+              opacity: root.showPlugBadge ? 1 : 0
+              textFormat: Text.PlainText
+              text: Model.PLUG_BADGE
+              color: root.bar.foreground
+              font.family: root.bar.fontFamily
+              font.pixelSize: Math.round(Style.font.display * 0.4)
+              anchors.left: parent.right
+              anchors.leftMargin: Style.space(1)
+              anchors.bottom: parent.bottom
+              anchors.bottomMargin: Math.round(parent.height * 0.12)
+            }
           }
 
           Column {
             id: heroLabels
             anchors.left: heroIcon.right
-            anchors.leftMargin: Style.space(14)
+            anchors.leftMargin: Style.space(14) + heroPlug.width
             anchors.right: heroPercent.left
             anchors.rightMargin: Style.space(10)
             anchors.verticalCenter: parent.verticalCenter
@@ -437,8 +492,12 @@ Panel {
         // of the condition: UPower briefly reports FullyCharged on plug-in when
         // the battery sits above the charge-control start threshold, and we
         // refuse to flicker the whole panel for that ~1s window.
-        Row {
+        Column {
           visible: root.batteryInfo.percentage !== undefined
+          width: parent.width
+          spacing: Style.spacing.labelGap
+
+        Row {
           width: parent.width
           spacing: Style.space(20)
 
@@ -461,6 +520,12 @@ Panel {
               value: root.chargeThresholdActive ? Commons.I18n.t("power.holding") : (root.batteryFull ? "-" : root.reading(root.batteryInfo.rate))
             }
           }
+        }
+
+        InfoPair {
+          label: Commons.I18n.t("power.powerSource", "Power source")
+          value: root.pluggedIn ? Commons.I18n.t("power.acAdapter", "AC adapter") : Commons.I18n.t("power.sourceBattery", "Battery")
+        }
         }
 
         // ---------- Power profile picker ----------

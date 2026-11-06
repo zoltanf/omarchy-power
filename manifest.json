@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "id": "zoltanf.power",
-  "name": "My Power",
+  "name": "Power + Charger",
   "version": "1.0.0",
-  "author": "Omarchy",
-  "description": "Battery, power profile, and system stats",
+  "author": "zoltanf (based on Omarchy's power widget)",
+  "description": "Battery, power profile, and system stats, and a plug badge while the charger is connected",
   "kinds": [
     "bar-widget"
   ],
@@ -12,8 +12,8 @@
     "barWidget": "Panel.qml"
   },
   "barWidget": {
-    "displayName": "My Power",
-    "description": "Battery, power profile, and system stats",
+    "displayName": "Power + Charger",
+    "description": "Battery, power profile, and system stats, and a plug badge while the charger is connected",
     "category": "System",
     "allowMultiple": false
   },

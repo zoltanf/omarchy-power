@@ -63,19 +63,19 @@ function chargeThresholdActive(device, onBattery, states) {
   return Number(d.changeRate || 0) <= 0.2 || Number(d.timeToFull || 0) >= 8 * 60 * 60
 }
 
-function batteryIcon(device, onBattery, states) {
+// The bolt means energy is flowing in: it shows only while charging. Plugged
+// in but not charging (holding at the charge limit, or full) is the plain
+// battery, and the panel adds the plug badge (PLUG_BADGE) for that.
+var PLUG_BADGE = "󰚥"
+
+function batteryIcon(device, charging) {
   var d = device || {}
   if (!d.isPresent) return ""
 
   var chargingIcons = ["󰢜", "󰂆", "󰂇", "󰂈", "󰢝", "󰂉", "󰢞", "󰂊", "󰂋", "󰂅"]
   var defaultIcons = ["󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"]
   var index = Math.max(0, Math.min(9, Math.floor(d.percentage * 10)))
-  var threshold = chargeThresholdActive(d, onBattery, states)
-
-  if (threshold) return defaultIcons[index]
-  if (d.state === states.FullyCharged) return "󰂅"
-  if (!onBattery) return chargingIcons[index]
-  return defaultIcons[index]
+  return charging ? chargingIcons[index] : defaultIcons[index]
 }
 
 function modeLabel(device, onBattery, states, tr) {
@@ -84,7 +84,7 @@ function modeLabel(device, onBattery, states, tr) {
   if (!d.isPresent) return ""
 
   var percentage = d.isPresent ? d.percentage : 0
-  if (chargeThresholdActive(d, onBattery, states)) return t("power.threshold", "Threshold")
+  if (chargeThresholdActive(d, onBattery, states)) return t("power.pluggedInHolding", "Plugged in · holding at limit")
   if (onBattery) return t("power.onBattery", "On battery")
   if (!onBattery && percentage >= 1) return t("power.fullyCharged", "Fully charged")
   return t("power.charging", "Charging")
