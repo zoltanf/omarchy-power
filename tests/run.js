@@ -40,9 +40,10 @@ eq("line steps", M.historyLine(pts, 1000, 600, 60, 10),
 eq("plugged spans merge", M.historyPluggedSpans(pts, 1000, 600, 60), [{ x: 30, w: 30 }])
 
 eq("span hours", M.historySpan(6), { n: 6, unit: "h" })
-eq("span a day stays hours", M.historySpan(24), { n: 24, unit: "h" })
+eq("span a day", M.historySpan(24), { n: 1, unit: "d" })
+eq("span 12 hours", M.historySpan(12), { n: 12, unit: "h" })
 eq("span days", M.historySpan(72), { n: 3, unit: "d" })
-eq("every range has a label", M.HISTORY_RANGES.map(h => M.historySpan(h).n), [1, 6, 24, 3, 7])
+eq("every range has a label", M.HISTORY_RANGES.map(h => M.historySpan(h).n), [1, 3, 6, 12, 1, 3, 7])
 
 eq("value before the first point", M.historyValueAt(pts, 399), null)
 eq("value on a point", M.historyValueAt(pts, 700).v, 50)

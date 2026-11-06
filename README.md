@@ -17,7 +17,7 @@ on battery.
   source** row reads "AC adapter" or "Battery".
 - **Battery history:** a graph of the battery level, with a strip under it
   where the charger was connected. Buttons over it switch between the last
-  hour, 6 hours, 24 hours, 3 days and 7 days, and the choice is remembered
+  1, 3, 6 and 12 hours and 1, 3 and 7 days, and the choice is remembered
   (`historyHours` in the widget's `shell.json` entry). Hover the graph for the
   time and level at that point; the longer views mark each midnight with a
   faint line. It reads UPower's own charge record, so it covers the whole

@@ -36,7 +36,7 @@ creating one).
   returns nothing. Rows come only on 1% steps or state changes: drawn as steps.
   Fixed 0–100% scale. Verified with 6 h (flat, plugged in all day) and a
   temporary 24 h window (a 78→75% dip, the charger strip's gap).
-- Ranges, hover, rate (2026-11-07): chips 1h/6h/24h/3d/7d
+- Ranges, hover, rate (2026-11-07): chips 1h/3h/6h/12h/1d/3d/7d
   (`Model.HISTORY_RANGES`) set `historyHours` (1–168) at once and write it
   0.8 s later (`saveHistoryHours`); midnight lines from 24 h up; a hover
   readout (cursor line, dot, tip with time · level · plugged in); the rate row

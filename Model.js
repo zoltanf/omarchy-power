@@ -221,13 +221,13 @@ function historyPluggedSpans(points, nowSec, windowSec, w) {
 }
 
 // The graph's time ranges in hours, one chip each over the graph.
-var HISTORY_RANGES = [1, 6, 24, 72, 168]
+var HISTORY_RANGES = [1, 3, 6, 12, 24, 72, 168]
 
-// A range as a count and unit for its labels: 72 → { n: 3, unit: "d" }.
-// Up to a day stays in hours.
+// A range as a count and unit for its short labels: 72 → { n: 3, unit: "d" },
+// 24 → { n: 1, unit: "d" }. Below a day it is hours.
 function historySpan(hours) {
   var h = Number(hours) || 0
-  if (h > 24 && h % 24 === 0) return { n: h / 24, unit: "d" }
+  if (h >= 24 && h % 24 === 0) return { n: h / 24, unit: "d" }
   return { n: h, unit: "h" }
 }
 

@@ -183,13 +183,15 @@ Panel {
   Timer { id: historySaveTimer; interval: 800; onTriggered: root.saveHistoryHours() }
   Component.onDestruction: if (historySaveTimer.running) saveHistoryHours()
 
-  // "LAST 6 HOURS", "LAST 3 DAYS"; and the short form "6h", "3d" for the
-  // chips and the "ago" label.
+  // "LAST 6 HOURS", "LAST 24 HOURS", "LAST 3 DAYS"; and the short form "6h",
+  // "1d", "3d" for the chips and the "ago" label.
   function historyTitle() {
-    var s = Model.historySpan(historyHours), n = Commons.I18n.formatNumber(s.n)
-    if (s.unit === "d") return Commons.I18n.t("power.historyTitleDays", "LAST %1 DAYS").replace("%1", n)
-    if (s.n === 1) return Commons.I18n.t("power.historyTitleHour", "LAST HOUR")
-    return Commons.I18n.t("power.historyTitle", "LAST %1 HOURS").replace("%1", n)
+    if (historyHours === 1) return Commons.I18n.t("power.historyTitleHour", "LAST HOUR")
+    if (historyHours <= 24)
+      return Commons.I18n.t("power.historyTitle", "LAST %1 HOURS").replace("%1", Commons.I18n.formatNumber(historyHours))
+    var s = Model.historySpan(historyHours)
+    if (s.unit === "d") return Commons.I18n.t("power.historyTitleDays", "LAST %1 DAYS").replace("%1", Commons.I18n.formatNumber(s.n))
+    return Commons.I18n.t("power.historyTitle", "LAST %1 HOURS").replace("%1", Commons.I18n.formatNumber(historyHours))
   }
 
   function historySpanShort(hours) {
@@ -419,7 +421,7 @@ Panel {
           text: Model.PLUG_BADGE
           color: button.foreground
           font.family: button.fontFamily
-          font.pixelSize: Math.round(batteryGlyph.paintedHeight * 0.62)
+          font.pixelSize: Math.round(batteryGlyph.paintedHeight * 0.71)
           renderType: Text.NativeRendering
           // Left edge just past the battery's painted right edge; bottom on
           // the battery's bottom.
