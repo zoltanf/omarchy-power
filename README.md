@@ -31,7 +31,7 @@ right-click percentage toggle) works as in the stock widget.
 ## Install
 
 ```sh
-omarchy plugin add <repository URL> --enable
+omarchy plugin add https://github.com/zoltanf/omarchy-power.git --enable
 ```
 
 The plugin declares itself a replacement for `omarchy.power`

@@ -2,8 +2,9 @@
 
 Omarchy bar widget `zoltanf.power` ("Power + Charger"), cloned from
 `omarchy.power` with `omarchy plugin clone` on 2026-11-06. README.md covers
-what it changes. Local git repo only; no GitHub remote yet (ask before
-creating one).
+what it changes. **Public** GitHub repo `zoltanf/omarchy-power`, created
+2026-11-07: keep home-network details and screenshots of the author's machine
+out of it.
 
 ## State (2026-11-06)
 
