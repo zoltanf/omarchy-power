@@ -156,14 +156,17 @@ function parseHistory(text) {
       var r = list[i]
       if (!(r instanceof Array) || r.length < 3) continue
       var t = Number(r[0]), v = Number(r[1]), s = Number(r[2])
-      if (!isFinite(t) || !isFinite(v) || t <= 0) continue
-      rows.push({ t: t, v: Math.max(0, Math.min(100, v)), plugged: PLUGGED_STATES.indexOf(s) !== -1 })
+      // State 0 (unknown) rows carry no reading: UPower writes one with
+      // level 0 at boot and resume, in the same second as the real row. Kept,
+      // they drew a drop to 0% that held until the next change.
+      if (!isFinite(t) || !isFinite(v) || t <= 0 || !(s > 0)) continue
+      rows.push({ t: t, v: Math.max(0, Math.min(100, v)), plugged: PLUGGED_STATES.indexOf(s) !== -1, i: rows.length })
     }
   } catch (e) {
     return []
   }
-  rows.sort(function(a, b) { return a.t - b.t })
-  return rows
+  rows.sort(function(a, b) { return a.t - b.t || a.i - b.i })
+  return rows.map(function(r) { return { t: r.t, v: r.v, plugged: r.plugged } })
 }
 
 // The points to draw for the last `windowSec` up to `nowSec`: the level at the
@@ -215,4 +218,49 @@ function historyPluggedSpans(points, nowSec, windowSec, w) {
     else if (x1 > x0) out.push({ x: x0, w: x1 - x0 })
   }
   return out
+}
+
+// The graph's time ranges in hours, one chip each over the graph.
+var HISTORY_RANGES = [1, 6, 24, 72, 168]
+
+// A range as a count and unit for its labels: 72 → { n: 3, unit: "d" }.
+// Up to a day stays in hours.
+function historySpan(hours) {
+  var h = Number(hours) || 0
+  if (h > 24 && h % 24 === 0) return { n: h / 24, unit: "d" }
+  return { n: h, unit: "h" }
+}
+
+// The point in effect at time t (the last one at or before it; the series
+// is a step line), or null before the first point.
+function historyValueAt(points, t) {
+  if (!(points instanceof Array) || points.length === 0 || !(t >= points[0].t)) return null
+  var lo = 0, hi = points.length - 1
+  while (lo < hi) {
+    var mid = (lo + hi + 1) >> 1
+    if (points[mid].t <= t) lo = mid
+    else hi = mid - 1
+  }
+  return points[lo]
+}
+
+// x of each local midnight inside the window, in a box w wide.
+function historyMidnights(nowSec, windowSec, w) {
+  var out = []
+  if (!(nowSec > 0) || !(windowSec > 0) || !(w > 0)) return out
+  var start = nowSec - windowSec
+  var d = new Date(start * 1000)
+  d.setHours(24, 0, 0, 0)
+  for (var guard = 0; d.getTime() / 1000 < nowSec && guard < 400; guard++) {
+    out.push((d.getTime() / 1000 - start) / windowSec * w)
+    d.setDate(d.getDate() + 1)
+  }
+  return out
+}
+
+// Share of the battery per hour at `watts` for a `capacityWh` battery:
+// 13 W on a 37 Wh battery is 35 %/h. NaN when either is unknown or zero.
+function percentPerHour(watts, capacityWh) {
+  var w = Math.abs(Number(watts) || 0), c = Number(capacityWh) || 0
+  return c > 0 && w > 0 ? w / c * 100 : NaN
 }

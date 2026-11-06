@@ -36,8 +36,22 @@ creating one).
   returns nothing. Rows come only on 1% steps or state changes: drawn as steps.
   Fixed 0–100% scale. Verified with 6 h (flat, plugged in all day) and a
   temporary 24 h window (a 78→75% dip, the charger strip's gap).
+- Ranges, hover, rate (2026-11-07): chips 1h/6h/24h/3d/7d
+  (`Model.HISTORY_RANGES`) set `historyHours` (1–168) at once and write it
+  0.8 s later (`saveHistoryHours`); midnight lines from 24 h up; a hover
+  readout (cursor line, dot, tip with time · level · plugged in); the rate row
+  adds %/h from UPower's `changeRate` / `energyCapacity`. GetHistory asks for
+  up to 5000 rows (7 days on battery can pass 1000). Verified: the chips and
+  the 1h/6h/3d/7d views render (set through shell.json, then restored).
+  Not exercised by the agent: clicking a chip and hovering (no pointer
+  injection; `hyprctl dispatch movecursor` sends no hover events), and the
+  %/h value (the battery holds at its limit, where the row reads "Holding").
 
 ## Gotchas
+
+- UPower writes an unknown-state row (state 0, level 0) at boot and resume, in
+  the same second as the real row. `parseHistory` drops state-0 rows: kept,
+  one sorted after its twin drew an 8-hour drop to 0% in the 3-day view.
 
 - The bar background on this machine is `none`: a badge drawn over the glyph
   with a halo cut-out (netvpn's shield approach) merged into the battery. The

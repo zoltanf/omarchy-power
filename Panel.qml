@@ -159,7 +159,65 @@ Panel {
   // ---------- Battery history (UPower's own record) ----------
   // Fetched when the panel opens and then once a minute while it is open
   // (UPower adds a row per 1% step); the window slides with every refresh.
-  readonly property int historyHours: Math.max(1, Math.min(24, parseInt(setting("historyHours", 6), 10) || 6))
+  // The chips over the graph change the range at once and write the setting
+  // 0.8 s later: a settings write reloads the whole shell config on the UI
+  // thread, which would stall the click.
+  property int _pickedHistoryHours: 0
+  readonly property int historyHours: _pickedHistoryHours > 0 ? _pickedHistoryHours
+    : Math.max(1, Math.min(168, parseInt(setting("historyHours", 6), 10) || 6))
+
+  function pickHistoryHours(hours) {
+    if (hours === historyHours) return
+    _pickedHistoryHours = hours
+    historySaveTimer.restart()
+  }
+
+  function saveHistoryHours() {
+    historySaveTimer.stop()
+    if (_pickedHistoryHours <= 0) return
+    root.settings = Object.assign({}, root.settings, { historyHours: _pickedHistoryHours })
+    _pickedHistoryHours = 0
+    if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
+  }
+
+  Timer { id: historySaveTimer; interval: 800; onTriggered: root.saveHistoryHours() }
+  Component.onDestruction: if (historySaveTimer.running) saveHistoryHours()
+
+  // "LAST 6 HOURS", "LAST 3 DAYS"; and the short form "6h", "3d" for the
+  // chips and the "ago" label.
+  function historyTitle() {
+    var s = Model.historySpan(historyHours), n = Commons.I18n.formatNumber(s.n)
+    if (s.unit === "d") return Commons.I18n.t("power.historyTitleDays", "LAST %1 DAYS").replace("%1", n)
+    if (s.n === 1) return Commons.I18n.t("power.historyTitleHour", "LAST HOUR")
+    return Commons.I18n.t("power.historyTitle", "LAST %1 HOURS").replace("%1", n)
+  }
+
+  function historySpanShort(hours) {
+    var s = Model.historySpan(hours), n = Commons.I18n.formatNumber(s.n)
+    return s.unit === "d" ? Commons.I18n.t("power.spanDays", "%1d").replace("%1", n)
+                          : Commons.I18n.t("power.spanHours", "%1h").replace("%1", n)
+  }
+
+  // Hover readout: "14:32 · 78% · plugged in"; the weekday too from 24 h up.
+  function historyReadout(t, point) {
+    var d = new Date(t * 1000), loc = Qt.locale(Commons.I18n.formatLocale)
+    var time = d.toLocaleTimeString(loc, Locale.ShortFormat)
+    if (historyHours >= 24) time = d.toLocaleDateString(loc, "ddd") + " " + time
+    var parts = [time, Commons.I18n.formatNumber(Math.round(point.v)) + "%"]
+    if (point.plugged) parts.push(Commons.I18n.t("power.historyPlugged", "plugged in"))
+    return parts.join(" · ")
+  }
+
+  // The charge or drain rate as a share of the battery per hour, after the
+  // watts the battery script reports: "13.1W · 35%/h".
+  function rateText() {
+    var watts = root.reading(root.batteryInfo.rate)
+    var d = UPower.displayDevice
+    var pph = d ? Model.percentPerHour(d.changeRate, d.energyCapacity) : NaN
+    if (!isFinite(pph)) return watts
+    return watts + " · " + Commons.I18n.formatNumber(pph, pph >= 10 ? 0 : 1) + "%/h"
+  }
+
   property var historyRows: []
   property real historyNow: 0
   property real _historyFetchedAt: 0
@@ -180,7 +238,7 @@ Panel {
     if (!force && Date.now() - _historyFetchedAt < 60000) return
     _historyFetchedAt = Date.now()
     historyProc.command = ["busctl", "--json=short", "call", "org.freedesktop.UPower", historyDevicePath,
-                           "org.freedesktop.UPower.Device", "GetHistory", "suu", "charge", "0", "1000"]
+                           "org.freedesktop.UPower.Device", "GetHistory", "suu", "charge", "0", "5000"]
     historyProc.running = true
   }
 
@@ -559,7 +617,7 @@ Panel {
             }
             InfoPair {
               label: root.chargeThresholdActive ? Commons.I18n.t("power.batteryState") : (root.discharging ? Commons.I18n.t("power.discharging") : Commons.I18n.t("power.charging"))
-              value: root.chargeThresholdActive ? Commons.I18n.t("power.holding") : (root.batteryFull ? "-" : root.reading(root.batteryInfo.rate))
+              value: root.chargeThresholdActive ? Commons.I18n.t("power.holding") : (root.batteryFull ? "-" : root.rateText())
             }
           }
         }
@@ -585,16 +643,71 @@ Panel {
           readonly property real windowSec: root.historyHours * 3600
           readonly property var linePoints: Model.historyLine(root.historyPoints, root.historyNow, windowSec, width, graphHeight)
           readonly property var spans: Model.historyPluggedSpans(root.historyPoints, root.historyNow, windowSec, width)
+          // Faint day boundaries from a day's range up.
+          readonly property var midnights: root.historyHours >= 24 ? Model.historyMidnights(root.historyNow, windowSec, width) : []
 
-          PanelSectionHeader {
-            text: Commons.I18n.t("power.historyTitle", "LAST %1 HOURS").replace("%1", Commons.I18n.formatNumber(root.historyHours))
-            foreground: root.bar.foreground
-            fontFamily: root.bar.fontFamily
+          // Title, and the range chips on the right.
+          Item {
+            width: parent.width
+            implicitHeight: Math.max(historyTitle.implicitHeight, rangeChips.implicitHeight)
+
+            PanelSectionHeader {
+              id: historyTitle
+              anchors.left: parent.left
+              anchors.right: rangeChips.left
+              anchors.rightMargin: Style.space(8)
+              anchors.verticalCenter: parent.verticalCenter
+              elide: Text.ElideRight
+              text: root.historyTitle()
+              foreground: root.bar.foreground
+              fontFamily: root.bar.fontFamily
+            }
+
+            Row {
+              id: rangeChips
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: Style.space(2)
+
+              Repeater {
+                model: Model.HISTORY_RANGES
+                Button {
+                  required property int modelData
+                  text: root.historySpanShort(modelData)
+                  fontSize: Style.font.caption
+                  horizontalPadding: Style.space(6)
+                  verticalPadding: Style.space(2)
+                  selected: root.historyHours === modelData
+                  foreground: root.bar.foreground
+                  fontFamily: root.bar.fontFamily
+                  onClicked: root.pickHistoryHours(modelData)
+                }
+              }
+            }
           }
 
           Item {
+            id: graphBox
             width: parent.width
             height: historySection.graphHeight
+
+            // The point under the mouse, or null.
+            readonly property real hoverT: root.historyNow - historySection.windowSec
+                                           + Math.max(0, Math.min(width, graphHover.mouseX)) / width * historySection.windowSec
+            readonly property var hoverPoint: graphHover.containsMouse && historySection.linePoints.length >= 2
+                                              ? Model.historyValueAt(root.historyPoints, hoverT) : null
+
+            // Day boundaries.
+            Repeater {
+              model: historySection.midnights
+              Rectangle {
+                required property real modelData
+                x: Math.round(modelData)
+                width: 1
+                height: parent.height
+                color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.08)
+              }
+            }
 
             // 0%, 50% and 100% guides.
             Repeater {
@@ -649,6 +762,58 @@ Panel {
               font.family: root.bar.fontFamily
               font.pixelSize: Style.font.caption
             }
+
+            // Hover readout: a cursor line, a dot on the level, and the time
+            // and level in a tip on the half of the graph away from the dot.
+            MouseArea {
+              id: graphHover
+              anchors.fill: parent
+              hoverEnabled: true
+              acceptedButtons: Qt.NoButton
+            }
+
+            Rectangle {
+              visible: graphBox.hoverPoint !== null
+              x: Math.round(Math.max(0, Math.min(parent.width - 1, graphHover.mouseX)))
+              width: 1
+              height: parent.height
+              color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.35)
+            }
+
+            Rectangle {
+              id: hoverDot
+              visible: graphBox.hoverPoint !== null
+              readonly property real levelY: graphBox.hoverPoint ? parent.height - graphBox.hoverPoint.v / 100 * parent.height : 0
+              width: Style.space(6)
+              height: width
+              radius: width / 2
+              x: Math.max(0, Math.min(parent.width, graphHover.mouseX)) - width / 2
+              y: levelY - height / 2
+              color: root.bar.foreground
+            }
+
+            Rectangle {
+              visible: graphBox.hoverPoint !== null
+              readonly property real gap: Style.space(6)
+              width: hoverText.implicitWidth + Style.space(12)
+              height: hoverText.implicitHeight + Style.space(4)
+              radius: Style.space(3)
+              x: graphHover.mouseX + gap + width <= parent.width ? graphHover.mouseX + gap : Math.max(0, graphHover.mouseX - gap - width)
+              y: hoverDot.levelY < parent.height / 2 ? parent.height - height : 0
+              color: Commons.Color.tooltip.background
+              border.width: 1
+              border.color: Commons.Color.tooltip.border
+
+              Text {
+                id: hoverText
+                anchors.centerIn: parent
+                textFormat: Text.PlainText
+                text: graphBox.hoverPoint ? root.historyReadout(graphBox.hoverT, graphBox.hoverPoint) : ""
+                color: Commons.Color.tooltip.text
+                font.family: root.bar.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+            }
           }
 
           // The charger strip: where the charger was connected.
@@ -675,7 +840,7 @@ Panel {
 
             InfoLabel {
               id: historyStartLabel
-              text: Commons.I18n.t("power.historyStart", "%1 h ago").replace("%1", Commons.I18n.formatNumber(root.historyHours))
+              text: Commons.I18n.t("power.historyAgo", "%1 ago").replace("%1", root.historySpanShort(root.historyHours))
               font.pixelSize: Style.font.caption
             }
 

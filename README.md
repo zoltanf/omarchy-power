@@ -15,11 +15,15 @@ on battery.
 - **Panel:** the status line says "Plugged in · holding at limit" instead of
   "Threshold", the large battery icon gets the same plug, and a **Power
   source** row reads "AC adapter" or "Battery".
-- **Battery history:** a graph of the battery level over the last 6 hours, with
-  a strip under it where the charger was connected. It reads UPower's own
-  charge record, so it covers the whole window from the first open; nothing
-  runs in the background for it. Set `historyHours` (1–24) in the widget's
-  `shell.json` entry for a different window.
+- **Battery history:** a graph of the battery level, with a strip under it
+  where the charger was connected. Buttons over it switch between the last
+  hour, 6 hours, 24 hours, 3 days and 7 days, and the choice is remembered
+  (`historyHours` in the widget's `shell.json` entry). Hover the graph for the
+  time and level at that point; the longer views mark each midnight with a
+  faint line. It reads UPower's own charge record, so it covers the whole
+  window from the first open; nothing runs in the background for it.
+- **Charge rate:** while charging or on battery, the rate row adds the share
+  of the battery per hour to the watts, for example `13.1W · 35%/h`.
 
 Everything else (power profiles, battery size, cycles, charge limit, the
 right-click percentage toggle) works as in the stock widget.
