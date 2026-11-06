@@ -15,6 +15,11 @@ on battery.
 - **Panel:** the status line says "Plugged in · holding at limit" instead of
   "Threshold", the large battery icon gets the same plug, and a **Power
   source** row reads "AC adapter" or "Battery".
+- **Battery history:** a graph of the battery level over the last 6 hours, with
+  a strip under it where the charger was connected. It reads UPower's own
+  charge record, so it covers the whole window from the first open; nothing
+  runs in the background for it. Set `historyHours` (1–24) in the widget's
+  `shell.json` entry for a different window.
 
 Everything else (power profiles, battery size, cycles, charge limit, the
 right-click percentage toggle) works as in the stock widget.

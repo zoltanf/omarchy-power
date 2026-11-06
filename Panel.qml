@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Shapes
 import Quickshell
 import Quickshell.Io
 import Quickshell.Services.UPower
@@ -152,6 +153,46 @@ Panel {
     if (!batteryProc.running) batteryProc.running = true
     if (!profilesProc.running) profilesProc.running = true
     if (!systemProc.running) systemProc.running = true
+    refreshHistory(false)
+  }
+
+  // ---------- Battery history (UPower's own record) ----------
+  // Fetched when the panel opens and then once a minute while it is open
+  // (UPower adds a row per 1% step); the window slides with every refresh.
+  readonly property int historyHours: Math.max(1, Math.min(24, parseInt(setting("historyHours", 6), 10) || 6))
+  property var historyRows: []
+  property real historyNow: 0
+  property real _historyFetchedAt: 0
+  readonly property string historyDevicePath: {
+    var list = UPower.devices ? UPower.devices.values : []
+    for (var i = 0; i < list.length; i++) {
+      var d = list[i]
+      if (d && d.isLaptopBattery && d.isPresent && d.nativePath) return Model.upowerBatteryPath(d.nativePath)
+    }
+    return ""
+  }
+  readonly property var historyPoints: Model.historySeries(historyRows, historyNow, historyHours * 3600,
+                                                           batteryFraction * 100, pluggedIn)
+
+  function refreshHistory(force) {
+    historyNow = Date.now() / 1000
+    if (historyDevicePath === "" || historyProc.running) return
+    if (!force && Date.now() - _historyFetchedAt < 60000) return
+    _historyFetchedAt = Date.now()
+    historyProc.command = ["busctl", "--json=short", "call", "org.freedesktop.UPower", historyDevicePath,
+                           "org.freedesktop.UPower.Device", "GetHistory", "suu", "charge", "0", "1000"]
+    historyProc.running = true
+  }
+
+  Process {
+    id: historyProc
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        root.historyRows = Model.parseHistory(text)
+        root.historyNow = Date.now() / 1000
+      }
+    }
   }
 
   function updateKeyValue(raw, targetName) {
@@ -210,6 +251,7 @@ Panel {
       }
 
       refresh()
+      refreshHistory(true)
       var idx = profiles.indexOf(activeProfile)
       profileIndex = idx >= 0 ? idx : 0
       cursorActive = false
@@ -526,6 +568,142 @@ Panel {
           label: Commons.I18n.t("power.powerSource", "Power source")
           value: root.pluggedIn ? Commons.I18n.t("power.acAdapter", "AC adapter") : Commons.I18n.t("power.sourceBattery", "Battery")
         }
+        }
+
+        PanelSeparator {
+          foreground: root.bar.foreground
+        }
+
+        // ---------- Battery history graph ----------
+        // Its height is fixed, so the panel does not resize when the history
+        // arrives a moment after opening.
+        Column {
+          id: historySection
+          width: parent.width
+          spacing: Style.space(6)
+          readonly property real graphHeight: Style.space(56)
+          readonly property real windowSec: root.historyHours * 3600
+          readonly property var linePoints: Model.historyLine(root.historyPoints, root.historyNow, windowSec, width, graphHeight)
+          readonly property var spans: Model.historyPluggedSpans(root.historyPoints, root.historyNow, windowSec, width)
+
+          PanelSectionHeader {
+            text: Commons.I18n.t("power.historyTitle", "LAST %1 HOURS").replace("%1", Commons.I18n.formatNumber(root.historyHours))
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+          }
+
+          Item {
+            width: parent.width
+            height: historySection.graphHeight
+
+            // 0%, 50% and 100% guides.
+            Repeater {
+              model: [0, 0.5, 1]
+              Rectangle {
+                required property real modelData
+                width: parent.width
+                height: 1
+                y: Math.round((parent.height - 1) * (1 - modelData))
+                color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.08)
+              }
+            }
+
+            Shape {
+              anchors.fill: parent
+              visible: historySection.linePoints.length >= 2
+              preferredRendererType: Shape.CurveRenderer
+
+              ShapePath {
+                strokeWidth: 0
+                strokeColor: "transparent"
+                fillColor: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.10)
+                PathPolyline {
+                  path: {
+                    var pts = historySection.linePoints
+                    if (pts.length < 2) return []
+                    var out = [Qt.point(pts[0].x, historySection.graphHeight)]
+                    for (var i = 0; i < pts.length; i++) out.push(Qt.point(pts[i].x, pts[i].y))
+                    out.push(Qt.point(pts[pts.length - 1].x, historySection.graphHeight))
+                    return out
+                  }
+                }
+              }
+
+              ShapePath {
+                strokeWidth: 1.5
+                strokeColor: root.bar.foreground
+                fillColor: "transparent"
+                joinStyle: ShapePath.MiterJoin
+                PathPolyline {
+                  path: historySection.linePoints.map(function(p) { return Qt.point(p.x, p.y) })
+                }
+              }
+            }
+
+            Text {
+              anchors.centerIn: parent
+              visible: historySection.linePoints.length < 2
+              textFormat: Text.PlainText
+              text: Commons.I18n.t("power.historyEmpty", "No battery history yet")
+              color: Qt.darker(root.bar.foreground, 1.4)
+              font.family: root.bar.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+          }
+
+          // The charger strip: where the charger was connected.
+          Item {
+            width: parent.width
+            height: Style.space(3)
+
+            Repeater {
+              model: historySection.spans
+              Rectangle {
+                required property var modelData
+                x: modelData.x
+                width: Math.max(1, modelData.w)
+                height: parent.height
+                radius: height / 2
+                color: Commons.Color.accent
+              }
+            }
+          }
+
+          Item {
+            width: parent.width
+            implicitHeight: historyStartLabel.implicitHeight
+
+            InfoLabel {
+              id: historyStartLabel
+              text: Commons.I18n.t("power.historyStart", "%1 h ago").replace("%1", Commons.I18n.formatNumber(root.historyHours))
+              font.pixelSize: Style.font.caption
+            }
+
+            Row {
+              anchors.horizontalCenter: parent.horizontalCenter
+              spacing: Style.space(4)
+              visible: historySection.spans.length > 0
+
+              Rectangle {
+                width: Style.space(10)
+                height: Style.space(3)
+                radius: height / 2
+                color: Commons.Color.accent
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              InfoLabel {
+                text: Commons.I18n.t("power.historyPlugged", "plugged in")
+                font.pixelSize: Style.font.caption
+              }
+            }
+
+            InfoLabel {
+              anchors.right: parent.right
+              text: Commons.I18n.t("power.historyNow", "now")
+              font.pixelSize: Style.font.caption
+            }
+          }
         }
 
         // ---------- Power profile picker ----------

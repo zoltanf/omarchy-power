@@ -26,6 +26,16 @@ creating one).
 - Verified live, plugged in at the limit: bar plug, panel status and row.
   Not exercised: on battery, charging below the limit, fully charged (would
   need the charger unplugged or the limit changed).
+- Battery history (2026-11-06): `busctl --json=short call org.freedesktop.UPower
+  <battery path> org.freedesktop.UPower.Device GetHistory suu charge 0 1000`
+  on open and once a minute while open; parsed and cut in `Model.js`
+  (`parseHistory`, `historySeries`, `historyLine`, `historyPluggedSpans`;
+  `node tests/run.js`). The history files under /var/lib/upower are root-only,
+  hence D-Bus. UPower's timespan argument drops the row from before the window
+  (the start level), so the full record is fetched (timespan 0); resolution 0
+  returns nothing. Rows come only on 1% steps or state changes: drawn as steps.
+  Fixed 0–100% scale. Verified with 6 h (flat, plugged in all day) and a
+  temporary 24 h window (a 78→75% dip, the charger strip's gap).
 
 ## Gotchas
 
