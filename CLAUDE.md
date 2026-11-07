@@ -69,7 +69,7 @@ out of it.
   `capacity` = energy-full / energy-full-design) under Charge cycles; Power
   source moved from a full-width row into the right column beside it.
   `healthPercentage` is normalised if it comes as 0–1. Verified: 83% shown
-  for UPower's 82.7%. `preview.png` still shows the old layout.
+  for UPower's 82.7%. `preview.png` redone with it (3-day view).
 
 ## Gotchas
 
