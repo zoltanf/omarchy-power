@@ -9,6 +9,8 @@ with a charge limit (for example 75–80%) spends most of its plugged-in time
 holding at that limit, and there the stock widget looks exactly like it does
 on battery.
 
+![The Power + Charger panel, plugged in at a 75–80% charge limit](preview.png)
+
 - **Bar:** a small plug next to the battery icon while the charger is connected
   and the battery is not charging (holding at the limit, or full). While it
   charges, the icon shows the bolt as before.
