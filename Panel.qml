@@ -240,8 +240,11 @@ Panel {
   // watts the battery script reports: "13.1W · 35%/h".
   function rateText() {
     var watts = root.reading(root.batteryInfo.rate)
+    // From the watts shown (the kernel's live reading, which time left uses
+    // too): UPower's changeRate is averaged and trails it after a load change.
     var d = UPower.displayDevice
-    var pph = d ? Model.percentPerHour(d.changeRate, d.energyCapacity) : NaN
+    var capacity = d && d.energyCapacity > 0 ? d.energyCapacity : parseFloat(root.batteryInfo.size)
+    var pph = Model.percentPerHour(parseFloat(root.batteryInfo.rate), capacity)
     if (!isFinite(pph)) return watts
     return watts + " · " + Commons.I18n.formatNumber(pph, pph >= 10 ? 0 : 1) + "%/h"
   }

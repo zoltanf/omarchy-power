@@ -40,12 +40,14 @@ out of it.
 - Ranges, hover, rate (2026-11-07): chips 1h/3h/6h/12h/1d/3d/7d
   (`Model.HISTORY_RANGES`) set `historyHours` (1–168) through `saveSetting`; midnight lines from 24 h up; a hover
   readout (cursor line, dot, tip with time · level · plugged in); the rate row
-  adds %/h from UPower's `changeRate` / `energyCapacity`. GetHistory asks for
+  adds %/h from the watts shown (`omarchy-battery-status`, the kernel's live
+  `power_now`) / UPower's `energyCapacity`. Not UPower's `changeRate`: it is
+  averaged and trailed the watts ("14W · 33%/h" on battery, 2026-11-07). GetHistory asks for
   up to 5000 rows (7 days on battery can pass 1000). Verified: the chips and
   the 1h/6h/3d/7d views render (set through shell.json, then restored).
   Not exercised by the agent: clicking a chip and hovering (no pointer
-  injection; `hyprctl dispatch movecursor` sends no hover events), and the
-  %/h value (the battery holds at its limit, where the row reads "Holding").
+  injection; `hyprctl dispatch movecursor` sends no hover events). The %/h
+  value was checked on battery (2026-11-07).
 
 - Performance (2026-11-07): the 5 s refresh while open runs only
   `omarchy-battery-status`. Upstream's `omarchy-system-stats` call (about
