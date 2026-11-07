@@ -26,8 +26,8 @@ eq("parse garbage", M.parseHistory("not json"), [])
 eq("parse no data", M.parseHistory("{}"), [])
 
 const rows = [{ t: 100, v: 90, plugged: false }, { t: 500, v: 80, plugged: false }, { t: 800, v: 75, plugged: true }]
-eq("series: start level from the row before the window", M.historySeries(rows, 1000, 600, 76, true),
-   [{ t: 400, v: 90, plugged: false }, { t: 500, v: 80, plugged: false }, { t: 800, v: 75, plugged: true }, { t: 1000, v: 76, plugged: true }])
+eq("series: start level on the line from the row before the window", M.historySeries(rows, 1000, 600, 76, true),
+   [{ t: 400, v: 82.5, plugged: false }, { t: 500, v: 80, plugged: false }, { t: 800, v: 75, plugged: true }, { t: 1000, v: 76, plugged: true }])
 eq("series: data starting inside the window", M.historySeries(rows.slice(1), 1000, 900, 76, true),
    [{ t: 500, v: 80, plugged: false }, { t: 800, v: 75, plugged: true }, { t: 1000, v: 76, plugged: true }])
 eq("series: flat (no rows in window)", M.historySeries([{ t: 10, v: 79, plugged: true }], 1000, 600, 79, true),
@@ -35,8 +35,8 @@ eq("series: flat (no rows in window)", M.historySeries([{ t: 10, v: 79, plugged:
 eq("series: nothing", M.historySeries([], 1000, 600, 79, true), [])
 
 const pts = [{ t: 400, v: 100, plugged: false }, { t: 700, v: 50, plugged: true }, { t: 1000, v: 50, plugged: true }]
-eq("line steps", M.historyLine(pts, 1000, 600, 60, 10),
-   [{ x: 0, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 5 }, { x: 60, y: 5 }, { x: 60, y: 5 }])
+eq("line through the points", M.historyLine(pts, 1000, 600, 60, 10),
+   [{ x: 0, y: 0 }, { x: 30, y: 5 }, { x: 60, y: 5 }])
 eq("plugged spans merge", M.historyPluggedSpans(pts, 1000, 600, 60), [{ x: 30, w: 30 }])
 
 eq("span hours", M.historySpan(6), { n: 6, unit: "h" })
@@ -47,7 +47,8 @@ eq("every range has a label", M.HISTORY_RANGES.map(h => M.historySpan(h).n), [1,
 
 eq("value before the first point", M.historyValueAt(pts, 399), null)
 eq("value on a point", M.historyValueAt(pts, 700).v, 50)
-eq("value holds until the next point", M.historyValueAt(pts, 699).v, 100)
+eq("value between points is on the line", M.historyValueAt(pts, 550).v, 75)
+eq("value keeps the earlier point's charger state", M.historyValueAt(pts, 550).plugged, false)
 eq("value at now", M.historyValueAt(pts, 1000).t, 1000)
 eq("value of nothing", M.historyValueAt([], 5), null)
 

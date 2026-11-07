@@ -754,10 +754,9 @@ Panel {
             Shape {
               anchors.fill: parent
               visible: historySection.linePoints.length >= 2
-              // Steps are straight horizontal and vertical lines, so the
-              // plain renderer draws them the same as the curve renderer,
-              // with less work on every redraw.
-              preferredRendererType: Shape.GeometryRenderer
+              // The curve renderer antialiases the sloped line; the plain
+              // one draws it jagged without multisampling.
+              preferredRendererType: Shape.CurveRenderer
 
               ShapePath {
                 strokeWidth: 0
@@ -779,7 +778,7 @@ Panel {
                 strokeWidth: 1.5
                 strokeColor: root.bar.foreground
                 fillColor: "transparent"
-                joinStyle: ShapePath.MiterJoin
+                joinStyle: ShapePath.RoundJoin
                 PathPolyline {
                   path: historySection.linePoints.map(function(p) { return Qt.point(p.x, p.y) })
                 }

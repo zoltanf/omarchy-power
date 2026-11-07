@@ -34,7 +34,9 @@ out of it.
   `node tests/run.js`). The history files under /var/lib/upower are root-only,
   hence D-Bus. UPower's timespan argument drops the row from before the window
   (the start level), so the full record is fetched (timespan 0); resolution 0
-  returns nothing. Rows come only on 1% steps or state changes: drawn as steps.
+  returns nothing. Rows come only on 1% steps or state changes. Drawn as
+  straight lines between rows since 2026-11-07: steps made sub-pixel stairs
+  that looked jagged at 1h (each 1% is under a pixel tall).
   Fixed 0–100% scale. Verified with 6 h (flat, plugged in all day) and a
   temporary 24 h window (a 78→75% dip, the charger strip's gap).
 - Ranges, hover, rate (2026-11-07): chips 1h/3h/6h/12h/1d/3d/7d
@@ -56,7 +58,8 @@ out of it.
   profiles and history are fetched once at start (`prefetch`), so the first
   open is at its final size. `saveSetting` applies a setting at once and
   writes shell.json 0.8 s later (range chips, the right-click percentage
-  toggle). The graph uses `Shape.GeometryRenderer`. Verified: first open after
+  toggle). The graph used `Shape.GeometryRenderer` while it drew steps; with
+  sloped lines it is back on `Shape.CurveRenderer`, which antialiases. Verified: first open after
   a restart complete in its first frame; the percentage toggle over IPC (shown
   at once, written after 0.8 s); the 3-day steps look the same as with the
   curve renderer. Not exercised: the profile re-read after a pick or a plug.

@@ -182,25 +182,28 @@ function historySeries(rows, nowSec, windowSec, nowPercent, nowPlugged) {
     if (r.t <= start) before = r
     else if (r.t < nowSec) points.push({ t: r.t, v: r.v, plugged: r.plugged })
   }
-  if (before) points.unshift({ t: start, v: before.v, plugged: before.plugged })
   if (isFinite(nowPercent) && nowPercent >= 0)
     points.push({ t: nowSec, v: Math.max(0, Math.min(100, nowPercent)), plugged: !!nowPlugged })
+  // The window starts on the line from the row before it to the next point.
+  if (before) {
+    var next = points.length > 0 ? points[0] : null
+    var v = next && next.t > before.t
+      ? before.v + (next.v - before.v) * (start - before.t) / (next.t - before.t) : before.v
+    points.unshift({ t: start, v: v, plugged: before.plugged })
+  }
   return points.length >= 2 ? points : []
 }
 
-// Step line through the series (UPower records changes, so a level holds
-// until the next row), in a w×h box: [{x, y}].
+// Line through the series in a w×h box: [{x, y}]. UPower writes a row each
+// time the level reaches a new whole percent, so straight lines between rows
+// follow the real level; steps drew sub-pixel stairs.
 function historyLine(points, nowSec, windowSec, w, h) {
   var out = []
   if (!(points instanceof Array) || points.length < 2 || !(w > 0) || !(h > 0)) return out
   var start = nowSec - windowSec
   function px(t) { return Math.max(0, Math.min(w, (t - start) / windowSec * w)) }
   function py(v) { return h - v / 100 * h }
-  for (var i = 0; i < points.length; i++) {
-    var x = px(points[i].t)
-    if (i > 0) out.push({ x: x, y: py(points[i - 1].v) })
-    out.push({ x: x, y: py(points[i].v) })
-  }
+  for (var i = 0; i < points.length; i++) out.push({ x: px(points[i].t), y: py(points[i].v) })
   return out
 }
 
@@ -231,8 +234,8 @@ function historySpan(hours) {
   return { n: h, unit: "h" }
 }
 
-// The point in effect at time t (the last one at or before it; the series
-// is a step line), or null before the first point.
+// The level at time t on the line, with the charger state of the row in
+// effect then: { t, v, plugged }, or null before the first point.
 function historyValueAt(points, t) {
   if (!(points instanceof Array) || points.length === 0 || !(t >= points[0].t)) return null
   var lo = 0, hi = points.length - 1
@@ -241,7 +244,9 @@ function historyValueAt(points, t) {
     if (points[mid].t <= t) lo = mid
     else hi = mid - 1
   }
-  return points[lo]
+  var p = points[lo], q = points[lo + 1]
+  var v = q && q.t > p.t ? p.v + (q.v - p.v) * (t - p.t) / (q.t - p.t) : p.v
+  return { t: t, v: v, plugged: p.plugged }
 }
 
 // x of each local midnight inside the window, in a box w wide.
