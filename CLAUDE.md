@@ -64,6 +64,13 @@ out of it.
   at once, written after 0.8 s); the 3-day steps look the same as with the
   curve renderer. Not exercised: the profile re-read after a pick or a plug.
 
+- Health (2026-11-07): a "Health" row (`healthText`, from the laptop
+  battery's `healthPercentage` in Quickshell's UPower, which is UPower's
+  `capacity` = energy-full / energy-full-design) under Charge cycles; Power
+  source moved from a full-width row into the right column beside it.
+  `healthPercentage` is normalised if it comes as 0–1. Verified: 83% shown
+  for UPower's 82.7%. `preview.png` still shows the old layout.
+
 ## Gotchas
 
 - 2026-11-07: the shell froze (UI thread at 100%, IPC timing out) about 90 s

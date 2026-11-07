@@ -16,7 +16,9 @@ on battery.
   charges, the icon shows the bolt as before.
 - **Panel:** the status line says "Plugged in · holding at limit" instead of
   "Threshold", the large battery icon gets the same plug, and a **Power
-  source** row reads "AC adapter" or "Battery".
+  source** row reads "AC adapter" or "Battery". A **Health** row shows the
+  battery's full capacity today as a share of its design capacity, as UPower
+  reports it.
 - **Battery history:** a graph of the battery level, with a strip under it
   where the charger was connected. Buttons over it switch between the last
   1, 3, 6 and 12 hours and 1, 3 and 7 days, and the choice is remembered

@@ -252,13 +252,24 @@ Panel {
   property var historyRows: []
   property real historyNow: 0
   property real _historyFetchedAt: 0
-  readonly property string historyDevicePath: {
+  // The laptop's own battery (displayDevice is UPower's composite of all).
+  readonly property var batteryDevice: {
     var list = UPower.devices ? UPower.devices.values : []
     for (var i = 0; i < list.length; i++) {
       var d = list[i]
-      if (d && d.isLaptopBattery && d.isPresent && d.nativePath) return Model.upowerBatteryPath(d.nativePath)
+      if (d && d.isLaptopBattery && d.isPresent && d.nativePath) return d
     }
-    return ""
+    return null
+  }
+  readonly property string historyDevicePath: batteryDevice ? Model.upowerBatteryPath(batteryDevice.nativePath) : ""
+
+  // Full capacity today as a share of the design capacity (UPower's
+  // "capacity"), e.g. "83%"; "—" when the battery does not report it.
+  readonly property string healthText: {
+    var d = batteryDevice
+    var h = d && d.healthSupported ? Number(d.healthPercentage) : 0
+    if (h > 0 && h <= 1) h *= 100
+    return h > 0 ? Commons.I18n.formatNumber(Math.round(Math.min(h, 100))) + "%" : "—"
   }
   readonly property var historyPoints: Model.historySeries(historyRows, historyNow, historyHours * 3600,
                                                            batteryFraction * 100, pluggedIn)
@@ -636,6 +647,7 @@ Panel {
             spacing: Style.spacing.labelGap
             InfoPair { label: Commons.I18n.t("power.batterySize"); value: root.reading(root.batteryInfo.size) }
             InfoPair { label: Commons.I18n.t("power.chargeCycles"); value: root.reading(root.batteryInfo.cycles) || "—" }
+            InfoPair { label: Commons.I18n.t("power.batteryHealth", "Health"); value: root.healthText }
           }
 
           Column {
@@ -649,12 +661,11 @@ Panel {
               label: root.chargeThresholdActive ? Commons.I18n.t("power.batteryState") : (root.discharging ? Commons.I18n.t("power.discharging") : Commons.I18n.t("power.charging"))
               value: root.chargeThresholdActive ? Commons.I18n.t("power.holding") : (root.batteryFull ? "-" : root.rateText())
             }
+            InfoPair {
+              label: Commons.I18n.t("power.powerSource", "Power source")
+              value: root.pluggedIn ? Commons.I18n.t("power.acAdapter", "AC adapter") : Commons.I18n.t("power.sourceBattery", "Battery")
+            }
           }
-        }
-
-        InfoPair {
-          label: Commons.I18n.t("power.powerSource", "Power source")
-          value: root.pluggedIn ? Commons.I18n.t("power.acAdapter", "AC adapter") : Commons.I18n.t("power.sourceBattery", "Battery")
         }
         }
 
