@@ -16,7 +16,6 @@ Panel {
   // permits — needed for the togglePercentage method below.
   manageIpc: false
   property var batteryInfo: ({})
-  property var systemInfo: ({})
   property var profiles: []
   property string activeProfile: ""
   property int profileIndex: 0
@@ -147,41 +146,68 @@ Panel {
     return modeLabel()
   }
 
+  // Every 5 s while the panel is open. Upstream also ran
+  // omarchy-system-stats here (about 240 ms), whose output the panel never
+  // shows, and re-read the profiles; those now come only when they can change
+  // (refreshProfiles).
   function refresh() {
     if (!batteryPresent) return
 
     if (!batteryProc.running) batteryProc.running = true
-    if (!profilesProc.running) profilesProc.running = true
-    if (!systemProc.running) systemProc.running = true
     refreshHistory(false)
   }
+
+  // The profiles change when one is picked here, or when the power source
+  // switches (Omarchy applies the AC or battery profile): read them on open,
+  // after a pick, and shortly after a plug or unplug while open.
+  function refreshProfiles() {
+    if (batteryPresent && !profilesProc.running) profilesProc.running = true
+  }
+
+  Timer { id: sourceSwitchTimer; interval: 2000; onTriggered: if (root.opened) root.refreshProfiles() }
+  Connections {
+    target: UPower
+    function onOnBatteryChanged() { sourceSwitchTimer.restart() }
+  }
+
+  // Fetched once at start too, so the first open is already at its final
+  // size: without data the stats and the profile buttons are missing, and
+  // the panel grew when they arrived.
+  function prefetch() {
+    if (!batteryPresent) return
+    if (!batteryProc.running) batteryProc.running = true
+    refreshProfiles()
+    refreshHistory(true)
+  }
+  Component.onCompleted: prefetch()
+
+  // Settings apply at once (root.settings) and are written to shell.json
+  // 0.8 s later: the write copies and reloads the whole shell config on the
+  // UI thread, which stalled the click.
+  function saveSetting(key, value) {
+    var next = Object.assign({}, root.settings)
+    next[key] = value
+    root.settings = next
+    settingsSaveTimer.restart()
+  }
+
+  function flushSettings() {
+    settingsSaveTimer.stop()
+    if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
+  }
+
+  Timer { id: settingsSaveTimer; interval: 800; onTriggered: root.flushSettings() }
+  Component.onDestruction: if (settingsSaveTimer.running) flushSettings()
 
   // ---------- Battery history (UPower's own record) ----------
   // Fetched when the panel opens and then once a minute while it is open
   // (UPower adds a row per 1% step); the window slides with every refresh.
-  // The chips over the graph change the range at once and write the setting
-  // 0.8 s later: a settings write reloads the whole shell config on the UI
-  // thread, which would stall the click.
-  property int _pickedHistoryHours: 0
-  readonly property int historyHours: _pickedHistoryHours > 0 ? _pickedHistoryHours
-    : Math.max(1, Math.min(168, parseInt(setting("historyHours", 6), 10) || 6))
+  // Set by the range chips over the graph (saveSetting).
+  readonly property int historyHours: Math.max(1, Math.min(168, parseInt(setting("historyHours", 6), 10) || 6))
 
   function pickHistoryHours(hours) {
-    if (hours === historyHours) return
-    _pickedHistoryHours = hours
-    historySaveTimer.restart()
+    if (hours !== historyHours) saveSetting("historyHours", hours)
   }
-
-  function saveHistoryHours() {
-    historySaveTimer.stop()
-    if (_pickedHistoryHours <= 0) return
-    root.settings = Object.assign({}, root.settings, { historyHours: _pickedHistoryHours })
-    _pickedHistoryHours = 0
-    if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
-  }
-
-  Timer { id: historySaveTimer; interval: 800; onTriggered: root.saveHistoryHours() }
-  Component.onDestruction: if (historySaveTimer.running) saveHistoryHours()
 
   // "LAST 6 HOURS", "LAST 24 HOURS", "LAST 3 DAYS"; and the short form "6h",
   // "1d", "3d" for the chips and the "ago" label.
@@ -260,8 +286,7 @@ Panel {
     // Keep last known good data if a refresh briefly returns nothing — happens
     // around AC plug/unplug events. Avoids the section collapsing mid-transition.
     if (Object.keys(next).length === 0) return
-    if (targetName === "battery") batteryInfo = next
-    else systemInfo = next
+    batteryInfo = next
   }
 
   function updateProfiles(raw) {
@@ -285,8 +310,7 @@ Panel {
   }
 
   function togglePercentage() {
-    root.settings = Object.assign({}, root.settings, { showPercentage: !root.showPercentage })
-    if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
+    saveSetting("showPercentage", !root.showPercentage)
   }
 
   ShellIpc {
@@ -311,6 +335,7 @@ Panel {
       }
 
       refresh()
+      refreshProfiles()
       refreshHistory(true)
       var idx = profiles.indexOf(activeProfile)
       profileIndex = idx >= 0 ? idx : 0
@@ -318,7 +343,10 @@ Panel {
     }
   }
 
-  onBatteryPresentChanged: if (!batteryPresent) close()
+  onBatteryPresentChanged: {
+    if (!batteryPresent) close()
+    else prefetch()
+  }
 
   visible: batteryPresent
   implicitWidth: batteryPresent ? button.implicitWidth : 0
@@ -337,14 +365,11 @@ Panel {
   }
 
   Process {
-    id: systemProc
-    command: ["omarchy-system-stats"]
-    stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.updateKeyValue(text, "system") }
-  }
-
-  Process {
     id: actionProc
-    onExited: root.refresh()
+    onExited: {
+      root.refresh()
+      root.refreshProfiles()
+    }
   }
 
   Timer { interval: 5000; running: root.opened; repeat: true; onTriggered: root.refresh() }
@@ -726,7 +751,10 @@ Panel {
             Shape {
               anchors.fill: parent
               visible: historySection.linePoints.length >= 2
-              preferredRendererType: Shape.CurveRenderer
+              // Steps are straight horizontal and vertical lines, so the
+              // plain renderer draws them the same as the curve renderer,
+              // with less work on every redraw.
+              preferredRendererType: Shape.GeometryRenderer
 
               ShapePath {
                 strokeWidth: 0

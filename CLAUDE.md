@@ -38,8 +38,7 @@ out of it.
   Fixed 0–100% scale. Verified with 6 h (flat, plugged in all day) and a
   temporary 24 h window (a 78→75% dip, the charger strip's gap).
 - Ranges, hover, rate (2026-11-07): chips 1h/3h/6h/12h/1d/3d/7d
-  (`Model.HISTORY_RANGES`) set `historyHours` (1–168) at once and write it
-  0.8 s later (`saveHistoryHours`); midnight lines from 24 h up; a hover
+  (`Model.HISTORY_RANGES`) set `historyHours` (1–168) through `saveSetting`; midnight lines from 24 h up; a hover
   readout (cursor line, dot, tip with time · level · plugged in); the rate row
   adds %/h from UPower's `changeRate` / `energyCapacity`. GetHistory asks for
   up to 5000 rows (7 days on battery can pass 1000). Verified: the chips and
@@ -48,7 +47,25 @@ out of it.
   injection; `hyprctl dispatch movecursor` sends no hover events), and the
   %/h value (the battery holds at its limit, where the row reads "Holding").
 
+- Performance (2026-11-07): the 5 s refresh while open runs only
+  `omarchy-battery-status`. Upstream's `omarchy-system-stats` call (about
+  240 ms, output never shown) is gone. Profiles are read on open, after a pick,
+  and 2 s after a plug or unplug while open (`refreshProfiles`). Battery info,
+  profiles and history are fetched once at start (`prefetch`), so the first
+  open is at its final size. `saveSetting` applies a setting at once and
+  writes shell.json 0.8 s later (range chips, the right-click percentage
+  toggle). The graph uses `Shape.GeometryRenderer`. Verified: first open after
+  a restart complete in its first frame; the percentage toggle over IPC (shown
+  at once, written after 0.8 s); the 3-day steps look the same as with the
+  curve renderer. Not exercised: the profile re-read after a pick or a plug.
+
 ## Gotchas
+
+- 2026-11-07: the shell froze (UI thread at 100%, IPC timing out) about 90 s
+  after Home Assistant restarted; the `hass` plugin lost its websocket at
+  01:08:27. The freeze began just after a test edit of this widget's range,
+  but repeating the edit did not reproduce it. Suspect: the hass plugin's
+  reconnect, not this widget.
 
 - UPower writes an unknown-state row (state 0, level 0) at boot and resume, in
   the same second as the real row. `parseHistory` drops state-0 rows: kept,
